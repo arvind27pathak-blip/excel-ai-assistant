@@ -434,6 +434,19 @@ class DesktopTests(WorkspaceFixture):
         self.app.end_row.insert(0, '1')
         self.assertEqual(self.app._get_selected_range(), ((0, 1), ['Last, First']))
 
+    def test_column_picker_keeps_headers_that_contain_commas(self):
+        self.app.data_manager.df = pd.DataFrame({'Name': ['Ada'], 'Last, First': ['Lovelace, Ada']})
+        self.app._update_column_lists()
+        self.app._select_columns()
+        self.assertTrue(self.app.column_vars['Name'].get())
+        self.assertTrue(self.app.column_vars['Last, First'].get())
+        self.app.column_vars['Name'].set(False)
+        dialog = next(widget for widget in self.root.winfo_children() if isinstance(widget, tk.Toplevel))
+        self.app._apply_column_selection(dialog)
+        self.app.end_row.delete(0, tk.END)
+        self.app.end_row.insert(0, '1')
+        self.assertEqual(self.app._get_selected_range(), ((0, 1), ['Last, First']))
+
     def test_busy_document_rejects_cell_edits(self):
         self.app.data_manager.df = pd.DataFrame({'name': ['old']})
         self.app._operation = 'saving a file'
