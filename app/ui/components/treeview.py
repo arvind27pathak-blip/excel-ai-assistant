@@ -10,6 +10,23 @@ from typing import Any, Dict, Optional, List, Callable
 import pandas as pd
 
 
+def _tree_value(value):
+    """Keep text intact when Tk would otherwise store it as a number.
+
+    Tcl treeview values that look like integers are coerced, so ``0012``
+    becomes ``12`` and a later cell update writes that number back.
+    """
+    if value is None:
+        return "\u200b"
+    try:
+        missing = bool(pd.isna(value))
+    except (TypeError, ValueError):
+        missing = False
+    if missing:
+        return "\u200b"
+    return "\u200b" + str(value)
+
+
 class DataTreeview:
     """Enhanced treeview for displaying dataframe content with improved readability"""
 
@@ -128,9 +145,8 @@ class DataTreeview:
         display_df = df.head(max_rows) if len(df) > max_rows else df
 
         for i, (idx, row) in enumerate(display_df.iterrows()):
-            # Create values list with row number as first column (1-based for user display)
-            display_row_num = idx + 1  # Convert to 1-based indexing for display
-            values = [f"{display_row_num}"] + [str(val) if val is not None else "" for val in row]
+            # Row numbers follow the source index so sorting and filtering keep identity.
+            values = [_tree_value(idx + 1)] + [_tree_value(val) for val in row]
             
             # Set row tag for styling
             row_tag = "row_even" if i % 2 == 0 else "row_odd"
@@ -161,17 +177,14 @@ class DataTreeview:
         if item_id not in self.tree.get_children():
             return
 
-        # Get current values
-        current_values = list(self.tree.item(item_id)["values"])
-
-        # Find column index (add +1 because of the row number column)
-        col_idx = list(self.df.columns).index(col) + 1  # +1 for row number column
-
-        # Update value in the list
-        current_values[col_idx] = str(value) if value is not None else ""
-
-        # Update the tree item
-        self.tree.item(item_id, values=current_values)
+        # Write the value into this view, then redraw the row from the dataframe.
+        # Reading item values back would turn identifier text into integers.
+        if row in self.df.index:
+            if isinstance(value, str) and self.df[col].dtype != object:
+                self.df[col] = self.df[col].astype(object)
+            self.df.loc[row, col] = value
+            values = [_tree_value(row + 1)] + [_tree_value(self.df.loc[row, name]) for name in self.df.columns]
+            self.tree.item(item_id, values=values)
 
         # Mark as modified
         self.modified_cells.add((row, col))
@@ -208,8 +221,17 @@ class DataTreeview:
         if self.df is None or column not in self.df.columns:
             return
 
-        # Sort the dataframe
-        sorted_df = self.df.sort_values(by=column, ascending=not reverse)
+        # Sort the dataframe. Mixed text and numbers (after an AI edit) cannot
+        # be ordered with the default comparison.
+        try:
+            sorted_df = self.df.sort_values(by=column, ascending=not reverse)
+        except TypeError:
+            sorted_df = self.df.sort_values(
+                by=column,
+                ascending=not reverse,
+                key=lambda series: series.map(
+                    lambda value: "" if value is None or pd.isna(value) else str(value)),
+            )
 
         # Update treeview
         self.set_data(sorted_df)

@@ -225,6 +225,26 @@ class TreeviewTests(unittest.TestCase):
         self.view._copy_row(2)
         self.assertEqual(self.root.clipboard_get(), '(special)')
 
+    def test_identifier_text_stays_text_when_another_cell_is_edited(self):
+        self.manager.df = pd.DataFrame({'id': ['0012', '-0007'], 'name': ['NA', 'Bob']})
+        self.view.set_data(self.manager.df)
+        shown = [str(value).replace('\u200b', '') for value in self.view.tree.item('0')['values']]
+        self.assertEqual(shown, ['1', '0012', 'NA'])
+        self.assertIsInstance(self.view.tree.item('0')['values'][1], str)
+        self.view.update_cell(0, 'name', 'Ann')
+        shown = [str(value).replace('\u200b', '') for value in self.view.tree.item('0')['values']]
+        self.assertEqual(shown, ['1', '0012', 'Ann'])
+        self.assertEqual(self.manager.get_cell_value(0, 'id'), '0012')
+        self.assertEqual(self.manager.get_cell_value(1, 'id'), '-0007')
+
+    def test_mixed_number_and_text_column_can_be_sorted(self):
+        self.manager.df = pd.DataFrame({'amount': [2, 'twelve', 10]})
+        self.view.set_data(self.manager.df)
+        self.view._sort_by_column('amount')
+        self.assertCountEqual(list(self.view.df['amount']), [2, 'twelve', 10])
+        self.view._save_cell_edit(Mock(), 1, 'amount', 'edited')
+        self.assertEqual(self.manager.get_cell_value(1, 'amount'), 'edited')
+
 
 if __name__ == '__main__':
     unittest.main()

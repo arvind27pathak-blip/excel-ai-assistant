@@ -1328,8 +1328,13 @@ class ExcelAIAssistantApp:
             messagebox.showinfo("Info", "No data loaded")
             return
 
-        # Get current column selection
-        selected_columns = [col.strip() for col in self.columns_entry.get().split(",") if col.strip()]
+        # Get current column selection. Headers may contain commas, so this
+        # uses the same CSV parsing as the processing range.
+        try:
+            selected_columns = self._parse_column_list(self.columns_entry.get())
+        except csv.Error as error:
+            messagebox.showerror("Error", f"Invalid columns: {error}")
+            return
 
         # Create a dialog
         dialog = tk.Toplevel(self.root)
@@ -1584,6 +1589,15 @@ class ExcelAIAssistantApp:
         csv.writer(stream).writerow(columns)
         return stream.getvalue().rstrip('\r\n')
 
+    @staticmethod
+    def _parse_column_list(columns_text):
+        """Parse the column field, including headers that contain commas."""
+        columns_text = columns_text.strip()
+        if not columns_text:
+            return []
+        parsed = next(csv.reader([columns_text], skipinitialspace=True))
+        return list(dict.fromkeys(col.strip() for col in parsed if col.strip()))
+
     def _get_selected_range(self) -> Tuple[Optional[Tuple[int, int]], Optional[List[str]]]:
         """Get the selected range from inputs"""
         try:
@@ -1603,7 +1617,7 @@ class ExcelAIAssistantApp:
             # Get columns
             columns_text = self.columns_entry.get().strip()
             if columns_text:
-                columns = list(dict.fromkeys(col.strip() for col in next(csv.reader([columns_text], skipinitialspace=True)) if col.strip()))
+                columns = self._parse_column_list(columns_text)
 
                 # Validate columns
                 if self.data_manager.df is not None:
