@@ -41,7 +41,7 @@ jobs:
           python -m pip install --no-deps rebuilt/*.whl
           cd "$RUNNER_TEMP"
           python -I -c 'import app; from importlib.metadata import version; assert app.__version__ == version("excel-ai-assistant")'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-distributions
           path: dist/*
