@@ -1,0 +1,13 @@
+include LICENSE README.md CHANGELOG.md SECURITY.md CONTRIBUTING.md
+include requirements.txt requirements-test.txt main.py
+include uv.lock .python-version
+recursive-include app *.py
+recursive-include tests test_*.py workbook_fixtures.py
+recursive-include scripts *.py
+recursive-include docs *.md *.png
+prune .artifacts
+prune wheelhouse
+prune build
+prune .venv-clean
+prune .venv-clean314
+global-exclude *.py[cod] *.bak .env .env.*

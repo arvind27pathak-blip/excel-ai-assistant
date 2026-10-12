@@ -1,0 +1,79 @@
+name: Draft beta release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Validate beta tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          test "$RELEASE_REF_TYPE" = tag
+          python scripts/check_release.py --tag "$RELEASE_TAG"
+      - name: Build source distribution and wheel
+        run: |
+          python -m pip install build
+          python -m build
+          python scripts/check_release.py --tag "$GITHUB_REF_NAME" --dist dist
+      - name: Verify source distribution can rebuild the wheel
+        run: |
+          python -m pip wheel --no-deps --wheel-dir rebuilt dist/*.tar.gz
+          python -m pip install --no-deps rebuilt/*.whl
+          cd "$RUNNER_TEMP"
+          python -I -c 'import app; from importlib.metadata import version; assert app.__version__ == version("excel-ai-assistant")'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: dist/*
+          if-no-files-found: error
+
+  checks:
+    needs: build
+    uses: ./.github/workflows/ci.yml
+    with:
+      distribution-artifact: release-distributions
+
+  draft:
+    needs: [build, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+          path: dist
+      - name: Create draft prerelease with verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" dist/* \
+            --verify-tag --draft --prerelease \
+            --title "Excel AI Assistant $RELEASE_TAG (beta)" \
+            --notes-file "docs/releases/${RELEASE_TAG#v}.md"
