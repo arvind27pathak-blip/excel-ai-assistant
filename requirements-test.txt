@@ -1,2 +1,2 @@
 # Representative image/drawing workbook fixtures.
-pillow>=9.0.0
+pillow>=13.0.0
